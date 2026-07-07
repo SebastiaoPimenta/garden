@@ -490,12 +490,10 @@ class SvgBuilder:
             )
 
 
-def generate_svg(
+def _load_garden_timeline(
     repo: Path | None = None,
-    output: Path | None = None,
     json_input: Path | None = None,
-    embed_sprites: bool = True,
-) -> Path:
+) -> tuple[Garden, AnimationTimeline, SpriteCatalog]:
     from .animator import build_timeline
 
     if json_input:
@@ -511,6 +509,20 @@ def generate_svg(
     garden = Garden(grid=grid)
     sprites = SpriteCatalog()
     timeline = build_timeline(garden, sprites=sprites)
+    return garden, timeline, sprites
+
+
+def generate_svg(
+    repo: Path | None = None,
+    output: Path | None = None,
+    json_input: Path | None = None,
+    embed_sprites: bool = True,
+    garden: Garden | None = None,
+    timeline: AnimationTimeline | None = None,
+    sprites: SpriteCatalog | None = None,
+) -> Path:
+    if garden is None or timeline is None or sprites is None:
+        garden, timeline, sprites = _load_garden_timeline(repo, json_input)
 
     out = (
         output
@@ -521,3 +533,36 @@ def generate_svg(
     builder = SvgBuilder(garden, timeline, sprites, out, embed_sprites=embed_sprites)
     out.write_text(builder.build(), encoding="utf-8")
     return out
+
+
+def generate_svg_pair(
+    repo: Path | None = None,
+    output_dir: Path | None = None,
+    json_input: Path | None = None,
+) -> tuple[Path, Path]:
+    """Gera dois SVGs: GitHub (sprites externas) e local (sprites embutidas)."""
+    garden, timeline, sprites = _load_garden_timeline(repo, json_input)
+    out_dir = (
+        output_dir
+        or Path(__file__).resolve().parent.parent / "output"
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    github_path = out_dir / "garden-contribution.svg"
+    local_path = out_dir / "garden-contribution.local.svg"
+
+    generate_svg(
+        output=github_path,
+        embed_sprites=False,
+        garden=garden,
+        timeline=timeline,
+        sprites=sprites,
+    )
+    generate_svg(
+        output=local_path,
+        embed_sprites=True,
+        garden=garden,
+        timeline=timeline,
+        sprites=sprites,
+    )
+    return github_path, local_path

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from src.garden import SpriteCatalog
-from src.svg_builder import generate_svg
+from src.svg_builder import generate_svg, generate_svg_pair
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,17 +34,12 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         type=Path,
         default=None,
-        help="Caminho do SVG de saída (padrão: output/garden-contribution.svg)",
+        help="Gera só um SVG embutido neste caminho (padrão: dois arquivos em output/)",
     )
     parser.add_argument(
         "--check-sprites",
         action="store_true",
         help="Lista sprites ausentes e sai",
-    )
-    parser.add_argument(
-        "--external",
-        action="store_true",
-        help="Usa caminhos relativos para sprites (menor arquivo; só funciona via HTTP/GitHub, não em file://)",
     )
     args = parser.parse_args(argv)
 
@@ -60,17 +55,25 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        out = generate_svg(
-            repo=args.repo,
-            output=args.output,
-            json_input=args.json,
-            embed_sprites=not args.external,
-        )
+        if args.output:
+            out = generate_svg(
+                repo=args.repo,
+                output=args.output,
+                json_input=args.json,
+                embed_sprites=True,
+            )
+            print(f"SVG gerado: {out}")
+        else:
+            github, local = generate_svg_pair(
+                repo=args.repo,
+                json_input=args.json,
+            )
+            print(f"SVG GitHub (commitar): {github}")
+            print(f"SVG local (abrir no navegador): {local}")
     except Exception as exc:
         print(f"Erro: {exc}", file=sys.stderr)
         return 1
 
-    print(f"SVG gerado: {out}")
     catalog = SpriteCatalog()
     missing = catalog.missing_character_report()
     if missing:

@@ -30,10 +30,12 @@ Inspirado nos grids animados (cobrinha, etc.), mas com vibe **Bomberman**: perso
 ## Início rápido
 
 ```bash
-# Gerar a partir do git log do repositório atual
+# Gera dois arquivos em output/:
+#   garden-contribution.svg       → GitHub (sprites por URL relativa)
+#   garden-contribution.local.svg → abrir no navegador (sprites embutidas)
 python3 -m src.main
 
-# Saída customizada
+# Um único SVG embutido (caminho customizado)
 python3 -m src.main -o output/meu-jardim.svg
 
 # A partir de JSON (útil para testar)
@@ -68,9 +70,10 @@ Sem sprites, o gerador usa **placeholders** coloridos para você visualizar a an
 
 ## Uso no GitHub
 
-1. Gere o SVG: `python3 -m src.main`
-2. Faça commit de `output/garden-contribution.svg`
-3. O README já inclui a prévia com link para tela cheia (HTML abaixo). Para usar em outro repo, ajuste a URL raw:
+1. Gere os SVGs: `python3 -m src.main`
+2. Faça commit de `output/garden-contribution.svg` (e a pasta `sprites/`)
+3. Para pré-visualizar localmente, abra `output/garden-contribution.local.svg` no navegador
+4. O README já inclui a prévia com link para tela cheia (HTML abaixo). Para usar em outro repo, ajuste a URL raw:
 
 ```html
 <p align="center">
