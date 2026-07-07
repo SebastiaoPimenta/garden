@@ -41,6 +41,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Lista sprites ausentes e sai",
     )
+    parser.add_argument(
+        "--external",
+        action="store_true",
+        help="Usa caminhos relativos para sprites (menor arquivo; só funciona via HTTP/GitHub, não em file://)",
+    )
     args = parser.parse_args(argv)
 
     if args.check_sprites:
@@ -55,7 +60,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        out = generate_svg(repo=args.repo, output=args.output, json_input=args.json)
+        out = generate_svg(
+            repo=args.repo,
+            output=args.output,
+            json_input=args.json,
+            embed_sprites=not args.external,
+        )
     except Exception as exc:
         print(f"Erro: {exc}", file=sys.stderr)
         return 1

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.dom import minidom
@@ -19,6 +20,8 @@ from .garden import Garden, SpriteCatalog
 from .git_contributions import contributions_to_grid, get_grid_dates, load_contributions_from_git
 from .positions import cell_xy, flower_topleft_at_cell, svg_size
 
+XLINK_HREF = "{http://www.w3.org/1999/xlink}href"
+
 
 def _embed_sprite_href(path: Path, cache: dict[str, str]) -> str | None:
     key = str(path.resolve())
@@ -36,6 +39,11 @@ def _embed_sprite_href(path: Path, cache: dict[str, str]) -> str | None:
     return cache[key]
 
 
+def _relative_sprite_href(sprite_path: Path, output_path: Path) -> str:
+    rel = os.path.relpath(sprite_path.resolve(), output_path.parent.resolve())
+    return rel.replace(os.sep, "/")
+
+
 def _prettify(elem: ET.Element) -> str:
     rough = ET.tostring(elem, encoding="unicode")
     return minidom.parseString(rough).toprettyxml(indent="  ")
@@ -48,39 +56,51 @@ class SvgBuilder:
         timeline: AnimationTimeline,
         sprites: SpriteCatalog | None = None,
         output_path: Path | None = None,
+        embed_sprites: bool = True,
     ) -> None:
         self.garden = garden
         self.timeline = timeline
         self.sprites = sprites or SpriteCatalog()
         self.output_path = output_path
+        self.embed_sprites = embed_sprites
         self.width, self.height = svg_size()
         self.duration = timeline.total_duration
         self._embed_cache: dict[str, str] = {}
-        self._sprite_defs: dict[str, str] = {}
         self._defs_root: ET.Element | None = None
+        self._sprite_defs: dict[str, str] = {}
 
     def _register_defs(self, defs: ET.Element) -> None:
         self._defs_root = defs
 
+    def _sprite_href(self, sprite_path: Path) -> str | None:
+        if not sprite_path.is_file():
+            return None
+        if self.embed_sprites:
+            return _embed_sprite_href(sprite_path, self._embed_cache)
+        if self.output_path is None:
+            return _embed_sprite_href(sprite_path, self._embed_cache)
+        return _relative_sprite_href(sprite_path, self.output_path)
+
     def _sprite_def_id(self, sprite_path: Path, width: int, height: int) -> str | None:
         if self._defs_root is None:
             return None
-        key = str(sprite_path.resolve())
+        key = f"{sprite_path.resolve()}:{width}x{height}"
         if key in self._sprite_defs:
             return self._sprite_defs[key]
-        href = _embed_sprite_href(sprite_path, self._embed_cache)
+        href = self._sprite_href(sprite_path)
         if href is None:
             return None
-        def_id = f"sprite-{len(self._sprite_defs)}"
-        sym = ET.SubElement(
-            self._defs_root,
-            "symbol",
-            {"id": def_id, "viewBox": f"0 0 {width} {height}"},
-        )
+        def_id = f"img-{len(self._sprite_defs)}"
         ET.SubElement(
-            sym,
+            self._defs_root,
             "image",
-            {"href": href, "width": str(width), "height": str(height)},
+            {
+                "id": def_id,
+                "href": href,
+                XLINK_HREF: href,
+                "width": str(width),
+                "height": str(height),
+            },
         )
         self._sprite_defs[key] = def_id
         return def_id
@@ -94,16 +114,35 @@ class SvgBuilder:
         width: int,
         height: int,
     ) -> bool:
-        if sprite_path is None or not sprite_path.is_file():
+        if sprite_path is None:
             return False
-        def_id = self._sprite_def_id(sprite_path, width, height)
-        if def_id is None:
+        if self.embed_sprites:
+            def_id = self._sprite_def_id(sprite_path, width, height)
+            if def_id is None:
+                return False
+            ref = f"#{def_id}"
+            ET.SubElement(
+                parent,
+                "use",
+                {
+                    "href": ref,
+                    XLINK_HREF: ref,
+                    "x": str(x),
+                    "y": str(y),
+                    "width": str(width),
+                    "height": str(height),
+                },
+            )
+            return True
+        href = self._sprite_href(sprite_path)
+        if href is None:
             return False
         ET.SubElement(
             parent,
-            "use",
+            "image",
             {
-                "href": f"#{def_id}",
+                "href": href,
+                XLINK_HREF: href,
                 "x": str(x),
                 "y": str(y),
                 "width": str(width),
@@ -130,8 +169,9 @@ class SvgBuilder:
             {"width": "100%", "height": "100%", "fill": "#f6f8fa"},
         )
 
-        defs = ET.SubElement(svg, "defs")
-        self._register_defs(defs)
+        if self.embed_sprites:
+            defs = ET.SubElement(svg, "defs")
+            self._register_defs(defs)
 
         soil_g = ET.SubElement(svg, "g", {"id": "soil-layer"})
         for r in range(self.garden.rows):
@@ -454,6 +494,7 @@ def generate_svg(
     repo: Path | None = None,
     output: Path | None = None,
     json_input: Path | None = None,
+    embed_sprites: bool = True,
 ) -> Path:
     from .animator import build_timeline
 
@@ -477,6 +518,6 @@ def generate_svg(
     )
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    builder = SvgBuilder(garden, timeline, sprites, out)
+    builder = SvgBuilder(garden, timeline, sprites, out, embed_sprites=embed_sprites)
     out.write_text(builder.build(), encoding="utf-8")
     return out
