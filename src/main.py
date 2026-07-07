@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from src.garden import SpriteCatalog
-from src.svg_builder import generate_svg, generate_svg_pair
+from src.svg_builder import generate_svg
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         type=Path,
         default=None,
-        help="Gera só um SVG embutido neste caminho (padrão: dois arquivos em output/)",
+        help="Caminho do SVG de saída (padrão: output/garden-contribution.svg)",
     )
     parser.add_argument(
         "--check-sprites",
@@ -55,25 +55,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        if args.output:
-            out = generate_svg(
-                repo=args.repo,
-                output=args.output,
-                json_input=args.json,
-                embed_sprites=True,
-            )
-            print(f"SVG gerado: {out}")
-        else:
-            github, local = generate_svg_pair(
-                repo=args.repo,
-                json_input=args.json,
-            )
-            print(f"SVG GitHub (commitar): {github}")
-            print(f"SVG local (abrir no navegador): {local}")
+        out = generate_svg(
+            repo=args.repo,
+            output=args.output,
+            json_input=args.json,
+        )
     except Exception as exc:
         print(f"Erro: {exc}", file=sys.stderr)
         return 1
 
+    print(f"SVG gerado: {out}")
+    preview = out.parent / "preview.html"
+    if preview.is_file():
+        print(f"Preview:   {preview}")
     catalog = SpriteCatalog()
     missing = catalog.missing_character_report()
     if missing:

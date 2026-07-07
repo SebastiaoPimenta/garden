@@ -14,13 +14,13 @@ Inspirado nos grids animados (cobrinha, etc.), mas com vibe **Bomberman**: perso
 ## Demonstração
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/SebastiaoPimenta/garden/main/output/garden-contribution.svg">
+  <a href="https://raw.githubusercontent.com/SebastiaoPimenta/garden/main/output/preview.html">
     <strong>Clique para ver a animação em tela cheia</strong>
   </a>
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/SebastiaoPimenta/garden/main/output/garden-contribution.svg">
+  <a href="https://raw.githubusercontent.com/SebastiaoPimenta/garden/main/output/preview.html">
     <img src="output/garden-contribution.svg" alt="Garden contribution grid animado" width="1200" />
   </a>
 </p>
@@ -30,12 +30,10 @@ Inspirado nos grids animados (cobrinha, etc.), mas com vibe **Bomberman**: perso
 ## Início rápido
 
 ```bash
-# Gera dois arquivos em output/:
-#   garden-contribution.svg       → GitHub (sprites por URL relativa)
-#   garden-contribution.local.svg → abrir no navegador (sprites embutidas)
+# Gera output/garden-contribution.svg e output/preview.html
 python3 -m src.main
 
-# Um único SVG embutido (caminho customizado)
+# Caminho customizado (preview.html na mesma pasta)
 python3 -m src.main -o output/meu-jardim.svg
 
 # A partir de JSON (útil para testar)
@@ -70,25 +68,24 @@ Sem sprites, o gerador usa **placeholders** coloridos para você visualizar a an
 
 ## Uso no GitHub
 
-1. Gere os SVGs: `python3 -m src.main`
-2. Faça commit de `output/garden-contribution.svg` (e a pasta `sprites/`)
-3. Para pré-visualizar localmente, abra `output/garden-contribution.local.svg` no navegador
-4. O README já inclui a prévia com link para tela cheia (HTML abaixo). Para usar em outro repo, ajuste a URL raw:
+1. Gere o SVG: `python3 -m src.main`
+2. Faça commit de `output/garden-contribution.svg` e `output/preview.html`
+3. O README já inclui a prévia com link para tela cheia (HTML abaixo). Para usar em outro repo, ajuste a URL raw:
 
 ```html
 <p align="center">
-  <a href="https://raw.githubusercontent.com/SEU_USUARIO/garden/main/output/garden-contribution.svg">
+  <a href="https://raw.githubusercontent.com/SEU_USUARIO/garden/main/output/preview.html">
     <strong>Ver animação em tela cheia</strong>
   </a>
 </p>
 <p align="center">
-  <a href="https://raw.githubusercontent.com/SEU_USUARIO/garden/main/output/garden-contribution.svg">
+  <a href="https://raw.githubusercontent.com/SEU_USUARIO/garden/main/output/preview.html">
     <img src="output/garden-contribution.svg" alt="Garden" width="1200" />
   </a>
 </p>
 ```
 
-> `width="1200"` deixa a prévia maior no README (pode rolar na horizontal). O link **raw** abre o SVG animado no Chrome/Firefox em tamanho real.
+> Para tela cheia, use o link de `output/preview.html` (não abra o SVG raw diretamente).
 
 ## Estrutura do projeto
 

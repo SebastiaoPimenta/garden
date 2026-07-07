@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.dom import minidom
@@ -39,11 +38,6 @@ def _embed_sprite_href(path: Path, cache: dict[str, str]) -> str | None:
     return cache[key]
 
 
-def _relative_sprite_href(sprite_path: Path, output_path: Path) -> str:
-    rel = os.path.relpath(sprite_path.resolve(), output_path.parent.resolve())
-    return rel.replace(os.sep, "/")
-
-
 def _prettify(elem: ET.Element) -> str:
     rough = ET.tostring(elem, encoding="unicode")
     return minidom.parseString(rough).toprettyxml(indent="  ")
@@ -55,14 +49,10 @@ class SvgBuilder:
         garden: Garden,
         timeline: AnimationTimeline,
         sprites: SpriteCatalog | None = None,
-        output_path: Path | None = None,
-        embed_sprites: bool = True,
     ) -> None:
         self.garden = garden
         self.timeline = timeline
         self.sprites = sprites or SpriteCatalog()
-        self.output_path = output_path
-        self.embed_sprites = embed_sprites
         self.width, self.height = svg_size()
         self.duration = timeline.total_duration
         self._embed_cache: dict[str, str] = {}
@@ -75,11 +65,7 @@ class SvgBuilder:
     def _sprite_href(self, sprite_path: Path) -> str | None:
         if not sprite_path.is_file():
             return None
-        if self.embed_sprites:
-            return _embed_sprite_href(sprite_path, self._embed_cache)
-        if self.output_path is None:
-            return _embed_sprite_href(sprite_path, self._embed_cache)
-        return _relative_sprite_href(sprite_path, self.output_path)
+        return _embed_sprite_href(sprite_path, self._embed_cache)
 
     def _sprite_def_id(self, sprite_path: Path, width: int, height: int) -> str | None:
         if self._defs_root is None:
@@ -116,33 +102,16 @@ class SvgBuilder:
     ) -> bool:
         if sprite_path is None:
             return False
-        if self.embed_sprites:
-            def_id = self._sprite_def_id(sprite_path, width, height)
-            if def_id is None:
-                return False
-            ref = f"#{def_id}"
-            ET.SubElement(
-                parent,
-                "use",
-                {
-                    "href": ref,
-                    XLINK_HREF: ref,
-                    "x": str(x),
-                    "y": str(y),
-                    "width": str(width),
-                    "height": str(height),
-                },
-            )
-            return True
-        href = self._sprite_href(sprite_path)
-        if href is None:
+        def_id = self._sprite_def_id(sprite_path, width, height)
+        if def_id is None:
             return False
+        ref = f"#{def_id}"
         ET.SubElement(
             parent,
-            "image",
+            "use",
             {
-                "href": href,
-                XLINK_HREF: href,
+                "href": ref,
+                XLINK_HREF: ref,
                 "x": str(x),
                 "y": str(y),
                 "width": str(width),
@@ -169,9 +138,8 @@ class SvgBuilder:
             {"width": "100%", "height": "100%", "fill": "#f6f8fa"},
         )
 
-        if self.embed_sprites:
-            defs = ET.SubElement(svg, "defs")
-            self._register_defs(defs)
+        defs = ET.SubElement(svg, "defs")
+        self._register_defs(defs)
 
         soil_g = ET.SubElement(svg, "g", {"id": "soil-layer"})
         for r in range(self.garden.rows):
@@ -512,17 +480,48 @@ def _load_garden_timeline(
     return garden, timeline, sprites
 
 
+_PREVIEW_HTML = """<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Garden Contribution Grid</title>
+  <style>
+    html, body {{ margin: 0; min-height: 100%; background: #f6f8fa; }}
+    body {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      box-sizing: border-box;
+    }}
+    object {{ max-width: 100%; height: auto; border: 0; }}
+  </style>
+</head>
+<body>
+  <object data="{svg_name}" type="image/svg+xml">
+    <p>Abra <a href="{svg_name}">{svg_name}</a> no navegador.</p>
+  </object>
+</body>
+</html>
+"""
+
+
+def _write_preview_html(svg_path: Path) -> Path:
+    preview = svg_path.parent / "preview.html"
+    preview.write_text(
+        _PREVIEW_HTML.format(svg_name=svg_path.name),
+        encoding="utf-8",
+    )
+    return preview
+
+
 def generate_svg(
     repo: Path | None = None,
     output: Path | None = None,
     json_input: Path | None = None,
-    embed_sprites: bool = True,
-    garden: Garden | None = None,
-    timeline: AnimationTimeline | None = None,
-    sprites: SpriteCatalog | None = None,
 ) -> Path:
-    if garden is None or timeline is None or sprites is None:
-        garden, timeline, sprites = _load_garden_timeline(repo, json_input)
+    garden, timeline, sprites = _load_garden_timeline(repo, json_input)
 
     out = (
         output
@@ -530,39 +529,7 @@ def generate_svg(
     )
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    builder = SvgBuilder(garden, timeline, sprites, out, embed_sprites=embed_sprites)
+    builder = SvgBuilder(garden, timeline, sprites)
     out.write_text(builder.build(), encoding="utf-8")
+    _write_preview_html(out)
     return out
-
-
-def generate_svg_pair(
-    repo: Path | None = None,
-    output_dir: Path | None = None,
-    json_input: Path | None = None,
-) -> tuple[Path, Path]:
-    """Gera dois SVGs: GitHub (sprites externas) e local (sprites embutidas)."""
-    garden, timeline, sprites = _load_garden_timeline(repo, json_input)
-    out_dir = (
-        output_dir
-        or Path(__file__).resolve().parent.parent / "output"
-    )
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    github_path = out_dir / "garden-contribution.svg"
-    local_path = out_dir / "garden-contribution.local.svg"
-
-    generate_svg(
-        output=github_path,
-        embed_sprites=False,
-        garden=garden,
-        timeline=timeline,
-        sprites=sprites,
-    )
-    generate_svg(
-        output=local_path,
-        embed_sprites=True,
-        garden=garden,
-        timeline=timeline,
-        sprites=sprites,
-    )
-    return github_path, local_path
