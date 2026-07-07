@@ -11,6 +11,22 @@ Inspirado nos grids animados (cobrinha, etc.), mas com vibe **Bomberman**: perso
 3. **Flores em 4 estágios** — após regar, brotam em estágios; o tipo de flor depende do tier de fertilidade.
 4. **Final** — personagem para e espera tudo florescer, com emojis ❤️ 💻 ✨ flutuando acima.
 
+## Demonstração
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/SebastiaoPimenta/garden/main/output/garden-contribution.svg">
+    <strong>Clique para ver a animação em tela cheia</strong>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/SebastiaoPimenta/garden/main/output/garden-contribution.svg">
+    <img src="output/garden-contribution.svg" alt="Garden contribution grid animado" width="1200" />
+  </a>
+</p>
+
+<p align="center"><sub>Prévia no README — use o link acima para ver maior e com animação completa no navegador.</sub></p>
+
 ## Início rápido
 
 ```bash
@@ -53,14 +69,23 @@ Sem sprites, o gerador usa **placeholders** coloridos para você visualizar a an
 ## Uso no GitHub
 
 1. Gere o SVG: `python3 -m src.main`
-2. Hospede o SVG (ou converta para GIF se preferir compatibilidade máxima).
-3. No README:
+2. Faça commit de `output/garden-contribution.svg`
+3. O README já inclui a prévia com link para tela cheia (HTML abaixo). Para usar em outro repo, ajuste a URL raw:
 
-```markdown
-![Garden contributions](output/garden-contribution.svg)
+```html
+<p align="center">
+  <a href="https://raw.githubusercontent.com/SEU_USUARIO/garden/main/output/garden-contribution.svg">
+    <strong>Ver animação em tela cheia</strong>
+  </a>
+</p>
+<p align="center">
+  <a href="https://raw.githubusercontent.com/SEU_USUARIO/garden/main/output/garden-contribution.svg">
+    <img src="output/garden-contribution.svg" alt="Garden" width="1200" />
+  </a>
+</p>
 ```
 
-> SVG animado com SMIL funciona em muitos viewers; para GIF, use ferramentas como `ffmpeg` ou conversores online a partir do SVG.
+> `width="1200"` deixa a prévia maior no README (pode rolar na horizontal). O link **raw** abre o SVG animado no Chrome/Firefox em tamanho real.
 
 ## Estrutura do projeto
 

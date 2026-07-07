@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 
-from .config import CHARACTER_HEIGHT, HOME_POSITION, TIMING
+from .config import CHARACTER_HEIGHT, END_POSITION, START_POSITION, TIMING
 from .garden import Garden, Plot, SpriteCatalog
 from .pathfinding import (
     direction_view,
@@ -143,8 +143,8 @@ def build_timeline(
     growth_seed: int | None = None,
 ) -> AnimationTimeline:
     plots = garden.plots_to_water()
-    home = HOME_POSITION
-    start_pos = home if start_pos is None else start_pos
+    start_pos = START_POSITION if start_pos is None else start_pos
+    end_pos = END_POSITION
     if growth_seed is not None:
         random.seed(growth_seed)
     order = greedy_visit_order(garden, plots, start_pos)
@@ -195,8 +195,8 @@ def build_timeline(
             watered_at[(plot.row, plot.col)] = t
             prev_pos = pos
 
-    if prev_pos != home:
-        return_path = path_avoiding_plots(garden, prev_pos, home)
+    if prev_pos != end_pos:
+        return_path = path_avoiding_plots(garden, prev_pos, end_pos)
         for i in range(1, len(return_path)):
             prev = return_path[i - 1]
             cur = return_path[i]
@@ -206,7 +206,7 @@ def build_timeline(
             t = _append_walk_segment(tl, prev, cur, view, t, timing, sprites)
             prev_pos = cur
 
-    wait_x, wait_y = character_topleft(*cell_feet_xy(*home))
+    wait_x, wait_y = character_topleft(*cell_feet_xy(*end_pos))
 
     max_growth_end = t
     last_stage_dur = timing.growth_stage
@@ -237,7 +237,7 @@ def build_timeline(
         wi += 1
         wt += timing.waiting_loop
 
-    feet_x, feet_y = cell_feet_xy(*home)
+    feet_x, feet_y = cell_feet_xy(*end_pos)
     for i, emoji in enumerate(WAITING_EMOJIS):
         et = wait_start + i * (timing.emoji_float / len(WAITING_EMOJIS))
         tl.emojis.append(

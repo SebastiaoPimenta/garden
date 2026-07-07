@@ -22,8 +22,9 @@ FLOWER_HEIGHT = 64
 FLOWER_OVERFLOW_TOP = max(0, FLOWER_HEIGHT - CELL_SIZE)
 GRID_OVERFLOW_TOP = max(CHARACTER_OVERFLOW_TOP, FLOWER_OVERFLOW_TOP)
 
-# Posição inicial e final do personagem no grid (row, col)
-HOME_POSITION = (0, 0)
+# Posição do personagem no grid (row, col)
+START_POSITION = (0, 0)  # superior esquerda
+END_POSITION = (ROWS - 1, 0)  # inferior esquerda
 
 # Cores de terra por nível de contribuição (fallback sem sprite)
 SOIL_COLORS = {
