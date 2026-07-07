@@ -14,23 +14,23 @@ Inspirado nos grids animados (cobrinha, etc.), mas com vibe **Bomberman**: perso
 ## Demonstração
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/SebastiaoPimenta/garden/main/output/preview.html">
+  <a href="https://SebastiaoPimenta.github.io/garden/">
     <strong>Clique para ver a animação em tela cheia</strong>
   </a>
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/SebastiaoPimenta/garden/main/output/preview.html">
+  <a href="https://SebastiaoPimenta.github.io/garden/">
     <img src="output/garden-contribution.svg" alt="Garden contribution grid animado" width="1200" />
   </a>
 </p>
 
-<p align="center"><sub>Prévia no README — use o link acima para ver maior e com animação completa no navegador.</sub></p>
+<p align="center"><sub>Prévia no README — o link acima abre a animação via GitHub Pages.</sub></p>
 
 ## Início rápido
 
 ```bash
-# Gera output/garden-contribution.svg e output/preview.html
+# Gera output/garden-contribution.svg, output/preview.html e docs/index.html (GitHub Pages)
 python3 -m src.main
 
 # Caminho customizado (preview.html na mesma pasta)
@@ -68,24 +68,27 @@ Sem sprites, o gerador usa **placeholders** coloridos para você visualizar a an
 
 ## Uso no GitHub
 
-1. Gere o SVG: `python3 -m src.main`
-2. Faça commit de `output/garden-contribution.svg` e `output/preview.html`
-3. O README já inclui a prévia com link para tela cheia (HTML abaixo). Para usar em outro repo, ajuste a URL raw:
+1. Gere os arquivos: `python3 -m src.main`
+2. Faça commit de `output/garden-contribution.svg`, `output/preview.html` e `docs/`
+3. Ative **GitHub Pages**: *Settings → Pages → Build from branch `main`, folder `/docs`*
+4. A animação em tela cheia fica em `https://SEU_USUARIO.github.io/garden/`
+
+Para usar em outro repo, ajuste o usuário na URL:
 
 ```html
 <p align="center">
-  <a href="https://raw.githubusercontent.com/SEU_USUARIO/garden/main/output/preview.html">
+  <a href="https://SEU_USUARIO.github.io/garden/">
     <strong>Ver animação em tela cheia</strong>
   </a>
 </p>
 <p align="center">
-  <a href="https://raw.githubusercontent.com/SEU_USUARIO/garden/main/output/preview.html">
+  <a href="https://SEU_USUARIO.github.io/garden/">
     <img src="output/garden-contribution.svg" alt="Garden" width="1200" />
   </a>
 </p>
 ```
 
-> Para tela cheia, use o link de `output/preview.html` (não abra o SVG raw diretamente).
+> Links `raw.githubusercontent.com` exibem HTML como código-fonte. Use GitHub Pages (`docs/index.html`) ou abra `output/preview.html` localmente.
 
 ## Estrutura do projeto
 

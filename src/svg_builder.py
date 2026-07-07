@@ -12,6 +12,7 @@ from .config import (
     CHARACTER_WIDTH,
     FLOWER_HEIGHT,
     FLOWER_WIDTH,
+    PROJECT_ROOT,
     SOIL_COLORS,
     commits_to_soil_level,
 )
@@ -480,40 +481,48 @@ def _load_garden_timeline(
     return garden, timeline, sprites
 
 
-_PREVIEW_HTML = """<!DOCTYPE html>
+_PREVIEW_HTML_HEAD = """<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Garden Contribution Grid</title>
   <style>
-    html, body {{ margin: 0; min-height: 100%; background: #f6f8fa; }}
-    body {{
+    html, body { margin: 0; min-height: 100%; background: #f6f8fa; }
+    body {
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 1rem;
       box-sizing: border-box;
-    }}
-    object {{ max-width: 100%; height: auto; border: 0; }}
+    }
+    svg { max-width: 100%; height: auto; display: block; }
   </style>
 </head>
 <body>
-  <object data="{svg_name}" type="image/svg+xml">
-    <p>Abra <a href="{svg_name}">{svg_name}</a> no navegador.</p>
-  </object>
+"""
+
+_PREVIEW_HTML_TAIL = """
 </body>
 </html>
 """
 
 
-def _write_preview_html(svg_path: Path) -> Path:
-    preview = svg_path.parent / "preview.html"
-    preview.write_text(
-        _PREVIEW_HTML.format(svg_name=svg_path.name),
-        encoding="utf-8",
-    )
-    return preview
+def _write_preview_html(svg_path: Path) -> list[Path]:
+    svg_content = svg_path.read_text(encoding="utf-8").strip()
+    html = _PREVIEW_HTML_HEAD + svg_content + _PREVIEW_HTML_TAIL
+
+    written: list[Path] = []
+    for dest in (
+        svg_path.parent / "preview.html",
+        PROJECT_ROOT / "docs" / "index.html",
+    ):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(html, encoding="utf-8")
+        written.append(dest)
+
+    (PROJECT_ROOT / "docs" / ".nojekyll").touch(exist_ok=True)
+    return written
 
 
 def generate_svg(

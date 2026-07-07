@@ -7,6 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from src.config import PROJECT_ROOT
 from src.garden import SpriteCatalog
 from src.svg_builder import generate_svg
 
@@ -66,8 +67,11 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"SVG gerado: {out}")
     preview = out.parent / "preview.html"
+    pages = PROJECT_ROOT / "docs" / "index.html"
     if preview.is_file():
-        print(f"Preview:   {preview}")
+        print(f"Preview local: {preview}")
+    if pages.is_file():
+        print(f"GitHub Pages: {pages}  →  https://SEU_USUARIO.github.io/garden/")
     catalog = SpriteCatalog()
     missing = catalog.missing_character_report()
     if missing:
