@@ -1,41 +1,39 @@
 from __future__ import annotations
 
+import base64
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.dom import minidom
 
 from .animator import AnimationTimeline
 from .config import (
-    CELL_GAP,
     CELL_SIZE,
-    COLS,
-    PADDING,
-    ROWS,
+    CHARACTER_HEIGHT,
+    CHARACTER_WIDTH,
+    FLOWER_HEIGHT,
+    FLOWER_WIDTH,
     SOIL_COLORS,
-    SPRITES_DIR,
     commits_to_soil_level,
 )
 from .garden import Garden, SpriteCatalog
 from .git_contributions import contributions_to_grid, get_grid_dates, load_contributions_from_git
+from .positions import cell_xy, flower_topleft_at_cell, svg_size
 
 
-def _rel_sprite_path(path: Path, output: Path) -> str:
-    try:
-        return path.relative_to(output.parent).as_posix()
-    except ValueError:
-        return path.relative_to(SPRITES_DIR.parent).as_posix()
-
-
-def _cell_xy(row: int, col: int) -> tuple[float, float]:
-    x = PADDING + col * (CELL_SIZE + CELL_GAP)
-    y = PADDING + row * (CELL_SIZE + CELL_GAP)
-    return x, y
-
-
-def _svg_size() -> tuple[int, int]:
-    w = PADDING * 2 + COLS * CELL_SIZE + (COLS - 1) * CELL_GAP
-    h = PADDING * 2 + ROWS * CELL_SIZE + (ROWS - 1) * CELL_GAP
-    return w, h
+def _embed_sprite_href(path: Path, cache: dict[str, str]) -> str | None:
+    key = str(path.resolve())
+    if key in cache:
+        return cache[key]
+    if not path.is_file():
+        return None
+    data = path.read_bytes()
+    mime = "image/png"
+    if data[:3] == b"GIF":
+        mime = "image/gif"
+    elif data[:2] == b"\xff\xd8":
+        mime = "image/jpeg"
+    cache[key] = f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+    return cache[key]
 
 
 def _prettify(elem: ET.Element) -> str:
@@ -55,8 +53,64 @@ class SvgBuilder:
         self.timeline = timeline
         self.sprites = sprites or SpriteCatalog()
         self.output_path = output_path
-        self.width, self.height = _svg_size()
+        self.width, self.height = svg_size()
         self.duration = timeline.total_duration
+        self._embed_cache: dict[str, str] = {}
+        self._sprite_defs: dict[str, str] = {}
+        self._defs_root: ET.Element | None = None
+
+    def _register_defs(self, defs: ET.Element) -> None:
+        self._defs_root = defs
+
+    def _sprite_def_id(self, sprite_path: Path, width: int, height: int) -> str | None:
+        if self._defs_root is None:
+            return None
+        key = str(sprite_path.resolve())
+        if key in self._sprite_defs:
+            return self._sprite_defs[key]
+        href = _embed_sprite_href(sprite_path, self._embed_cache)
+        if href is None:
+            return None
+        def_id = f"sprite-{len(self._sprite_defs)}"
+        sym = ET.SubElement(
+            self._defs_root,
+            "symbol",
+            {"id": def_id, "viewBox": f"0 0 {width} {height}"},
+        )
+        ET.SubElement(
+            sym,
+            "image",
+            {"href": href, "width": str(width), "height": str(height)},
+        )
+        self._sprite_defs[key] = def_id
+        return def_id
+
+    def _sprite_image(
+        self,
+        parent: ET.Element,
+        sprite_path: Path | None,
+        x: float,
+        y: float,
+        width: int,
+        height: int,
+    ) -> bool:
+        if sprite_path is None or not sprite_path.is_file():
+            return False
+        def_id = self._sprite_def_id(sprite_path, width, height)
+        if def_id is None:
+            return False
+        ET.SubElement(
+            parent,
+            "use",
+            {
+                "href": f"#{def_id}",
+                "x": str(x),
+                "y": str(y),
+                "width": str(width),
+                "height": str(height),
+            },
+        )
+        return True
 
     def build(self) -> str:
         svg = ET.Element(
@@ -70,171 +124,77 @@ class SvgBuilder:
             },
         )
 
-        # Fundo
         ET.SubElement(
             svg,
             "rect",
-            {
-                "width": "100%",
-                "height": "100%",
-                "fill": "#f6f8fa",
-            },
+            {"width": "100%", "height": "100%", "fill": "#f6f8fa"},
         )
 
         defs = ET.SubElement(svg, "defs")
-        self._define_soil_patterns(defs)
-        self._define_sprite_symbols(defs)
+        self._register_defs(defs)
 
-        # Camada: terras
         soil_g = ET.SubElement(svg, "g", {"id": "soil-layer"})
         for r in range(self.garden.rows):
             for c in range(self.garden.cols):
-                commits = self.garden.grid[r][c]
-                self._draw_soil(soil_g, r, c, commits)
+                self._draw_soil(soil_g, r, c, self.garden.grid[r][c])
 
-        # Camada: flores (crescem em estágios)
         flower_g = ET.SubElement(svg, "g", {"id": "flower-layer"})
-        for gk in self.timeline.growth:
+        growth_sorted = sorted(
+            self.timeline.growth, key=lambda gk: (gk.row, gk.col, gk.stage)
+        )
+        for gk in growth_sorted:
             self._draw_flower_stage(flower_g, gk)
 
-        # Camada: personagem
         char_g = ET.SubElement(svg, "g", {"id": "character-layer"})
         self._draw_character(char_g)
 
-        # Camada: emojis
         emoji_g = ET.SubElement(svg, "g", {"id": "emoji-layer"})
         self._draw_emojis(emoji_g)
 
         return _prettify(svg)
 
-    def _define_soil_patterns(self, defs: ET.Element) -> None:
-        for level, color in SOIL_COLORS.items():
-            sprite = self.sprites.soil_sprite(level)
-            if sprite and sprite.is_file():
-                pat = ET.SubElement(
-                    defs,
-                    "pattern",
-                    {
-                        "id": f"soil-{level}",
-                        "width": str(CELL_SIZE),
-                        "height": str(CELL_SIZE),
-                        "patternUnits": "userSpaceOnUse",
-                    },
-                )
-                href = _rel_sprite_path(sprite, self.output_path) if self.output_path else sprite.as_posix()
-                ET.SubElement(
-                    pat,
-                    "image",
-                    {
-                        "href": href,
-                        "width": str(CELL_SIZE),
-                        "height": str(CELL_SIZE),
-                    },
-                )
-
-    def _define_sprite_symbols(self, defs: ET.Element) -> None:
-        # Pré-carrega símbolos de sprites usados na animação
-        seen: set[str] = set()
-
-        def add_symbol(symbol_id: str, sprite_path: Path | None) -> None:
-            if sprite_path is None or not sprite_path.is_file():
-                return
-            key = str(sprite_path)
-            if key in seen:
-                return
-            seen.add(key)
-            sym = ET.SubElement(
-                defs,
-                "symbol",
-                {
-                    "id": symbol_id,
-                    "viewBox": f"0 0 {CELL_SIZE} {CELL_SIZE}",
-                },
-            )
-            href = (
-                _rel_sprite_path(sprite_path, self.output_path)
-                if self.output_path
-                else sprite_path.as_posix()
-            )
-            ET.SubElement(
-                sym,
-                "image",
-                {
-                    "href": href,
-                    "width": str(CELL_SIZE),
-                    "height": str(CELL_SIZE),
-                },
-            )
-
-        for view in ("front", "back", "left", "right"):
-            for action in ("idle", "walk", "watering"):
-                frames = self.sprites.character_frames(view, action)
-                for i, fp in enumerate(frames):
-                    add_symbol(f"char-{view}-{action}-{i}", fp)
-
-        for i, fp in enumerate(self.sprites.waiting_frames()):
-            add_symbol(f"char-waiting-{i}", fp)
-
-        for tier in range(1, 5):
-            for stage in range(1, 5):
-                add_symbol(
-                    f"flower-t{tier}-s{stage}",
-                    self.sprites.flower_sprite(tier, stage),
-                )
-
     def _draw_soil(self, parent: ET.Element, row: int, col: int, commits: int) -> None:
-        x, y = _cell_xy(row, col)
+        x, y = cell_xy(row, col)
         level = commits_to_soil_level(commits)
         sprite = self.sprites.soil_sprite(level)
+        if sprite and sprite.is_file():
+            if not self._sprite_image(parent, sprite, x, y, CELL_SIZE, CELL_SIZE):
+                self._draw_soil_rect(parent, x, y, level)
+        else:
+            self._draw_soil_rect(parent, x, y, level)
+
+    def _draw_soil_rect(
+        self, parent: ET.Element, x: float, y: float, level: int
+    ) -> None:
         attrs: dict[str, str] = {
             "x": str(x),
             "y": str(y),
             "width": str(CELL_SIZE),
             "height": str(CELL_SIZE),
-            "rx": "2",
+            "rx": "4",
+            "fill": SOIL_COLORS.get(level, SOIL_COLORS[0]),
         }
-        if sprite and sprite.is_file():
-            attrs["fill"] = f"url(#soil-{level})"
-            ET.SubElement(parent, "rect", attrs)
-        else:
-            attrs["fill"] = SOIL_COLORS.get(level, SOIL_COLORS[0])
-            if level == 0:
-                attrs["stroke"] = "#d0d7de"
-                attrs["stroke-width"] = "0.5"
-            ET.SubElement(parent, "rect", attrs)
+        if level == 0:
+            attrs["stroke"] = "#d0d7de"
+            attrs["stroke-width"] = "0.5"
+        ET.SubElement(parent, "rect", attrs)
 
     def _draw_flower_stage(self, parent: ET.Element, gk) -> None:
-        x, y = _cell_xy(gk.row, gk.col)
-        symbol_id = f"flower-t{gk.tier}-s{gk.stage}"
+        fx, fy = flower_topleft_at_cell(gk.row, gk.col)
         sprite = self.sprites.flower_sprite(gk.tier, gk.stage)
 
         g = ET.SubElement(
             parent,
             "g",
-            {
-                "id": f"flower-{gk.row}-{gk.col}-s{gk.stage}",
-                "opacity": "0",
-            },
+            {"id": f"flower-{gk.row}-{gk.col}-s{gk.stage}", "opacity": "0"},
         )
 
-        if sprite and sprite.is_file():
-            use = ET.SubElement(
-                g,
-                "use",
-                {
-                    "href": f"#{symbol_id}",
-                    "x": str(x),
-                    "y": str(y),
-                    "width": str(CELL_SIZE),
-                    "height": str(CELL_SIZE),
-                },
-            )
-        else:
-            # Placeholder: círculo colorido por tier/estágio
+        if not self._sprite_image(g, sprite, fx, fy, FLOWER_WIDTH, FLOWER_HEIGHT):
             colors = {1: "#ffd93d", 2: "#ff6b9d", 3: "#c44569", 4: "#f8b500"}
-            size = 2 + gk.stage * 2
-            cx = x + CELL_SIZE / 2
-            cy = y + CELL_SIZE / 2 - (4 - gk.stage)
+            cx, cy = flower_topleft_at_cell(gk.row, gk.col)
+            cx += FLOWER_WIDTH / 2
+            cy += FLOWER_HEIGHT - 4 - (4 - gk.stage) * 4
+            size = 4 + gk.stage * 6
             ET.SubElement(
                 g,
                 "circle",
@@ -246,12 +206,11 @@ class SvgBuilder:
                     "opacity": str(0.4 + gk.stage * 0.15),
                 },
             )
-            use = g  # para animate
 
         appear = gk.time
         disappear = appear + 999 if gk.stage == 4 else self._next_growth_time(gk)
 
-        anim_in = ET.SubElement(
+        ET.SubElement(
             g,
             "animate",
             {
@@ -290,62 +249,35 @@ class SvgBuilder:
     def _draw_character(self, parent: ET.Element) -> None:
         char = ET.SubElement(parent, "g", {"id": "gardener"})
 
-        # Combina walk + water + waiting em sequência de visibilidade
-        all_frames: list[tuple[float, float, int, int, str, str, int]] = []
+        all_frames: list[tuple[float, float, float, str, str, int]] = []
 
         for wk in self.timeline.walk:
-            all_frames.append(
-                (wk.time, wk.time + 0.001, wk.row, wk.col, wk.view, "walk", wk.frame_index)
-            )
+            all_frames.append((wk.time, wk.x, wk.y, wk.view, "walk", wk.frame_index))
+
+        for ik in self.timeline.idle:
+            all_frames.append((ik.time, ik.x, ik.y, ik.view, "idle", ik.frame_index))
 
         for wk in self.timeline.water:
             all_frames.append(
-                (
-                    wk.time,
-                    wk.time + 0.001,
-                    wk.row,
-                    wk.col,
-                    wk.view,
-                    "watering",
-                    wk.frame_index,
-                )
+                (wk.time, wk.x, wk.y, wk.view, "watering", wk.frame_index)
             )
 
         for wk in self.timeline.waiting:
             all_frames.append(
-                (
-                    wk.time,
-                    wk.time + 0.001,
-                    wk.row,
-                    wk.col,
-                    "front",
-                    "waiting",
-                    wk.frame_index,
-                )
+                (wk.time, wk.x, wk.y, "front", "waiting", wk.frame_index)
             )
 
         all_frames.sort(key=lambda f: f[0])
 
         for i, frame in enumerate(all_frames):
-            t0, t1, row, col, view, action, fi = frame
-            x, y = _cell_xy(row, col)
+            t0, x, y, view, action, fi = frame
             g = ET.SubElement(char, "g", {"opacity": "0"})
 
-            symbol = self._resolve_char_symbol(view, action, fi)
-            if symbol:
-                ET.SubElement(
-                    g,
-                    "use",
-                    {
-                        "href": f"#{symbol}",
-                        "x": str(x),
-                        "y": str(y),
-                        "width": str(CELL_SIZE),
-                        "height": str(CELL_SIZE),
-                    },
-                )
-            else:
-                self._draw_char_placeholder(g, x, y, view, action)
+            symbol = self._resolve_char_sprite(view, action, fi)
+            if not self._sprite_image(
+                g, symbol, x, y, CHARACTER_WIDTH, CHARACTER_HEIGHT
+            ):
+                self._draw_char_placeholder(g, x, y, action)
 
             begin = f"{t0:.3f}s"
             ET.SubElement(
@@ -387,65 +319,106 @@ class SvgBuilder:
                     },
                 )
 
-    def _resolve_char_symbol(self, view: str, action: str, frame_index: int) -> str | None:
+    def _resolve_char_sprite(
+        self, view: str, action: str, frame_index: int
+    ) -> Path | None:
         if action == "waiting":
-            frames = self.sprites.waiting_frames()
-            if not frames:
-                frames = self.sprites.character_frames("front", "idle")
-            if not frames:
-                return None
-            fi = frame_index % len(frames)
-            return f"char-waiting-{fi}" if self.sprites.waiting_frames() else f"char-front-idle-0"
+            waiting = self.sprites.waiting_frames()
+            if waiting:
+                return waiting[frame_index % len(waiting)]
+            frames = self.sprites.character_frames("front", "idle")
+            return frames[0] if frames else None
+
+        if action == "idle":
+            frames = self.sprites.character_frames(view, "idle")
+            return frames[frame_index % len(frames)] if frames else None
 
         frames = self.sprites.character_frames(view, action)
         if not frames:
-            # fallback: idle da mesma view
             frames = self.sprites.character_frames(view, "idle")
         if not frames:
             return None
-        fi = frame_index % len(frames)
-        return f"char-{view}-{action}-{fi}"
+        return frames[frame_index % len(frames)]
 
     def _draw_char_placeholder(
-        self, parent: ET.Element, x: float, y: float, view: str, action: str
+        self, parent: ET.Element, x: float, y: float, action: str
     ) -> None:
         body = "#ff9ebb"
         hair = "#5c4033"
+        h = CHARACTER_HEIGHT
+        w = CHARACTER_WIDTH
+        # Corpo proporcional à altura maior
         ET.SubElement(
             parent,
             "rect",
-            {"x": str(x + 4), "y": str(y + 6), "width": "8", "height": "8", "fill": body},
+            {
+                "x": str(x + w * 0.25),
+                "y": str(y + h * 0.45),
+                "width": str(w * 0.5),
+                "height": str(h * 0.35),
+                "fill": body,
+            },
         )
         ET.SubElement(
             parent,
             "rect",
-            {"x": str(x + 3), "y": str(y + 2), "width": "10", "height": "5", "fill": hair},
+            {
+                "x": str(x + w * 0.2),
+                "y": str(y + h * 0.15),
+                "width": str(w * 0.6),
+                "height": str(h * 0.22),
+                "fill": hair,
+            },
+        )
+        ET.SubElement(
+            parent,
+            "rect",
+            {
+                "x": str(x + w * 0.35),
+                "y": str(y + h * 0.8),
+                "width": str(w * 0.12),
+                "height": str(h * 0.2),
+                "fill": body,
+            },
+        )
+        ET.SubElement(
+            parent,
+            "rect",
+            {
+                "x": str(x + w * 0.53),
+                "y": str(y + h * 0.8),
+                "width": str(w * 0.12),
+                "height": str(h * 0.2),
+                "fill": body,
+            },
         )
         if action == "watering":
             ET.SubElement(
                 parent,
                 "rect",
                 {
-                    "x": str(x + 10),
-                    "y": str(y + 8),
-                    "width": "4",
-                    "height": "3",
+                    "x": str(x + w * 0.65),
+                    "y": str(y + h * 0.5),
+                    "width": str(w * 0.25),
+                    "height": str(h * 0.12),
                     "fill": "#6cb4ee",
                 },
             )
+        if action == "walk":
+            # Pequeno deslocamento do pé para sugerir passo
+            leg = parent.findall("rect")[-2]
+            leg.set("y", str(float(leg.get("y", y)) + 2))
 
     def _draw_emojis(self, parent: ET.Element) -> None:
-        wait_start = self.timeline.waiting[0].time if self.timeline.waiting else self.duration
         for ek in self.timeline.emojis:
-            x, y = _cell_xy(ek.row, ek.col)
             text = ET.SubElement(
                 parent,
                 "text",
                 {
-                    "x": str(x + CELL_SIZE / 2),
-                    "y": str(y + ek.offset_y),
+                    "x": str(ek.x),
+                    "y": str(ek.y + ek.offset_y),
                     "text-anchor": "middle",
-                    "font-size": "10",
+                    "font-size": "18",
                     "opacity": "0",
                 },
             )
@@ -469,7 +442,7 @@ class SvgBuilder:
                 {
                     "attributeName": "transform",
                     "type": "translate",
-                    "values": f"0 0; 0 -6; 0 -12",
+                    "values": "0 0; 0 -12; 0 -24",
                     "begin": f"{ek.time:.3f}s",
                     "dur": "2s",
                     "repeatCount": "indefinite",
@@ -495,13 +468,15 @@ def generate_svg(
 
     grid = contributions_to_grid(counts, start, end)
     garden = Garden(grid=grid)
-    timeline = build_timeline(garden)
     sprites = SpriteCatalog()
+    timeline = build_timeline(garden, sprites=sprites)
 
-    out = output or Path(__file__).resolve().parent.parent / "output" / "garden-contribution.svg"
+    out = (
+        output
+        or Path(__file__).resolve().parent.parent / "output" / "garden-contribution.svg"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
 
     builder = SvgBuilder(garden, timeline, sprites, out)
-    svg_content = builder.build()
-    out.write_text(svg_content, encoding="utf-8")
+    out.write_text(builder.build(), encoding="utf-8")
     return out

@@ -7,9 +7,23 @@ from pathlib import Path
 ROWS = 7
 COLS = 53
 
-CELL_SIZE = 16
-CELL_GAP = 2
-PADDING = 8
+CELL_SIZE = 32
+CELL_GAP = 12
+PADDING = 16
+
+# Personagem maior que a célula — pés ancorados no centro-inferior do plot
+CHARACTER_WIDTH = 48
+CHARACTER_HEIGHT = 65
+CHARACTER_OVERFLOW_TOP = max(0, CHARACTER_HEIGHT - CELL_SIZE)
+
+# Flores maiores que a célula — base ancorada no centro-inferior do plot
+FLOWER_WIDTH = 64
+FLOWER_HEIGHT = 64
+FLOWER_OVERFLOW_TOP = max(0, FLOWER_HEIGHT - CELL_SIZE)
+GRID_OVERFLOW_TOP = max(CHARACTER_OVERFLOW_TOP, FLOWER_OVERFLOW_TOP)
+
+# Posição inicial e final do personagem no grid (row, col)
+HOME_POSITION = (0, 0)
 
 # Cores de terra por nível de contribuição (fallback sem sprite)
 SOIL_COLORS = {
@@ -41,14 +55,18 @@ def commits_to_soil_level(count: int) -> int:
 
 @dataclass(frozen=True)
 class Timing:
-  """Duração de cada fase da animação (segundos)."""
+    """Duração de cada fase da animação (segundos)."""
 
-  walk_frame: float = 0.12
-  water_frame: float = 0.15
-  growth_stage: float = 0.4
-  growth_stagger: float = 0.08
-  waiting_loop: float = 0.5
-  emoji_float: float = 2.0
+    walk_step_duration: float = 0.4
+    walk_substeps: int = 4
+    idle_before_water: float = 0.2
+    water_frame: float = 0.15
+    growth_stage: float = 1.0
+    growth_stage_min: float = 1.0
+    growth_stage_max: float = 10.0
+    growth_stagger: float = 0.15
+    waiting_loop: float = 0.5
+    emoji_float: float = 2.0
 
 
 TIMING = Timing()

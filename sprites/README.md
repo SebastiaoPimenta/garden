@@ -6,10 +6,10 @@ Sprites em **PNG** com fundo transparente. Todos os arquivos seguem convenções
 
 | Tipo | Tamanho | Notas |
 |------|---------|-------|
-| Personagem | 16×16 px | Pixel art; escala inteira (1x, 2x…) |
-| Flor (cada estágio) | 16×16 px | Centralizada na célula do grid |
-| Terra | 16×16 px | Opcional; o gerador desenha cores se ausente |
-| Efeitos | 16×16 px | Gotas, brilhos, etc. |
+| Personagem | **48×65 px** | Pixel art; pés no centro-inferior da célula; corpo ultrapassa o plot |
+| Flor (cada estágio) | **64×64 px** | Base no centro-inferior do plot; pode sobrepor células vizinhas |
+| Terra | 32×32 px | Opcional; o gerador desenha cores se ausente |
+| Efeitos | 32×32 px | Gotas, brilhos, etc. |
 
 ## Estrutura
 
@@ -43,10 +43,12 @@ character/{view}/{action}/{frame}.png
 | Pasta | Descrição | Frames |
 |-------|-----------|--------|
 | `idle/` | Parada | `000.png` (mínimo 1) |
-| `walk/` | Caminhando | `000.png`, `001.png`, … (mínimo 2) |
+| `walk/` | Caminhando | `000.png`, `001.png`, … (**mínimo 4** para passo fluido) |
 | `watering/` | Regando | `000.png`, `001.png`, … (mínimo 2) |
 
 **Views:** `front` · `back` · `left` · `right`
+
+Sprites do personagem são **mais altos que a célula** (48×65 px). Desenhe com os **pés na linha inferior** do canvas — o gerador ancora os pés no centro-inferior de cada plot.
 
 O gerador escolhe a view pela direção do movimento:
 - Indo para cima → `back`
@@ -71,6 +73,8 @@ Cada tier representa a beleza da flor conforme a fertilidade da terra (intensida
 ```
 flowers/tier-{1-4}/stage-{1-4}.png
 ```
+
+Sprites **64×64 px**, com a **base do caule no centro-inferior** do canvas. Flores maiores que o plot (32×32) e podem sobrepor plots adjacentes.
 
 | Arquivo | Estágio |
 |---------|---------|

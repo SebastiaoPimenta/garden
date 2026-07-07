@@ -44,7 +44,7 @@ sprites/
 └── effects/       (opcional)
 ```
 
-**Personagem:** 16×16 px, 4 views × 3 ações (+ múltiplos frames em `walk/` e `watering/`).
+**Personagem:** 48×65 px (pés embaixo), 4 views × 3 ações (+ múltiplos frames em `walk/`).
 
 **Flores:** 4 tiers (beleza) × 4 estágios (crescimento).
 
